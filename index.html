@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chick &amp; Soup — From Colors to Soups</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header>
+        <div class="logo">
+            <img src="logo.png" alt="Chick &amp; Soup logo" class="logo-img">
+            <h1>Chick &amp; <span>Soup</span></h1>
+        </div>
+        <p class="tagline">Upload a photo, we detect its colors and suggest you a soup!</p>
+    </header>
+
+    <main>
+        <!-- Upload Section -->
+        <section id="upload-section">
+            <div id="drop-zone">
+                <svg viewBox="0 0 64 64" width="56" height="56" class="upload-icon">
+                    <rect x="8" y="20" width="48" height="36" rx="4" fill="none" stroke="#b0b0b0" stroke-width="2"/>
+                    <circle cx="24" cy="34" r="6" fill="none" stroke="#b0b0b0" stroke-width="2"/>
+                    <polyline points="36,44 44,34 56,48" fill="none" stroke="#b0b0b0" stroke-width="2" stroke-linejoin="round"/>
+                    <polyline points="26,12 32,6 38,12" fill="none" stroke="#b0b0b0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <line x1="32" y1="6" x2="32" y2="24" stroke="#b0b0b0" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <p>Drag & drop an image here</p>
+                <span class="or">or</span>
+                <label for="file-input" class="btn">Choose a file</label>
+                <input type="file" id="file-input" accept="image/*" hidden>
+            </div>
+        </section>
+
+        <!-- Preview + Results -->
+        <section id="result-section" class="hidden">
+            <div class="result-grid">
+
+                <!-- Image preview -->
+                <div class="card image-card">
+                    <h2>Your Image</h2>
+                    <div class="image-wrapper">
+                        <img id="preview-img" alt="Uploaded preview">
+                        <canvas id="color-canvas" hidden></canvas>
+                    </div>
+                    <button id="btn-reset" class="btn btn-outline">Upload another image</button>
+                </div>
+
+                <!-- Detected colors -->
+                <div class="card colors-card">
+                    <h2>Detected Colors</h2>
+                    <div id="color-palette"></div>
+                    <div id="color-names"></div>
+                </div>
+
+                <!-- Soup suggestion -->
+                <div class="card soup-card">
+                    <div class="soup-header">
+                        <svg viewBox="0 0 64 64" width="44" height="44">
+                            <ellipse cx="32" cy="40" rx="26" ry="15" fill="#e88c3a"/>
+                            <ellipse cx="32" cy="38" rx="26" ry="15" fill="#f4a54a"/>
+                            <ellipse cx="32" cy="36" rx="22" ry="11" fill="#ffe0a6"/>
+                            <path d="M20 26 Q22 20 20 14" stroke="#ddd" stroke-width="2" fill="none" stroke-linecap="round"/>
+                            <path d="M32 24 Q34 18 32 12" stroke="#ddd" stroke-width="2" fill="none" stroke-linecap="round"/>
+                            <path d="M44 26 Q46 20 44 14" stroke="#ddd" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        </svg>
+                        <h2>Suggested Soup</h2>
+                    </div>
+                    <h3 id="soup-name"></h3>
+                    <p id="soup-description"></p>
+                    <div id="soup-ingredients">
+                        <h4>Ingredients</h4>
+                        <ul id="ingredients-list"></ul>
+                    </div>
+                    <div id="soup-color-bar"></div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>Chick &amp; Soup &mdash; English Project 2026</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

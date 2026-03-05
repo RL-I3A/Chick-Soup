@@ -113,6 +113,12 @@ main {
     margin: 8px 0 14px;
 }
 
+.paste-hint {
+    font-size: .75rem;
+    color: #bbb;
+    margin-top: 12px;
+}
+
 /* ====== BUTTONS ====== */
 .btn {
     display: inline-block;

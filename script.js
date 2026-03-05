@@ -46,37 +46,82 @@ btnReset.addEventListener('click', () => {
     fileInput.value = '';
 });
 
+// ──── Clipboard paste (Ctrl+V / ⌘V) ────
+document.addEventListener('paste', (e) => {
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (const item of items) {
+        if (item.type.startsWith('image/')) {
+            handleFile(item.getAsFile());
+            break;
+        }
+    }
+});
+
 // ──── Handle uploaded file ────
-function handleFile(file) {
-    if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file.');
+async function handleFile(file) {
+    // Accept by MIME type OR by extension (covers HEIC, HEIF, and browsers
+    // that return empty type for some formats)
+    const isImage = file.type.startsWith('image/')
+        || /\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif|svg)$/i.test(file.name);
+    if (!isImage) {
+        alert('Please upload an image file (JPEG, PNG, HEIC, WebP, etc.)');
         return;
     }
 
-    // Show loading
+    // Show loading spinner
     const loader = document.createElement('div');
     loader.className = 'loading-overlay';
     loader.innerHTML = '<div class="spinner"></div>';
     document.body.appendChild(loader);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    try {
+        // 1. Read as Data URL (for the visible <img> preview)
+        const dataUrl = await readAsDataURL(file);
+        previewImg.src = dataUrl;
+
+        // 2. Get a drawable source with proper EXIF orientation
+        //    createImageBitmap({ imageOrientation: 'from-image' }) corrects iPhone
+        //    rotation automatically. Falls back to plain Image if not supported.
+        let drawable;
+        try {
+            drawable = await createImageBitmap(file, { imageOrientation: 'from-image' });
+        } catch (_) {
+            drawable = await loadImage(dataUrl);
+        }
+
+        const colors = extractColors(drawable, 5);
+        const soup   = matchSoup(colors);
+        renderColors(colors);
+        renderSoup(soup, colors);
+
+        uploadSection.classList.add('hidden');
+        resultSection.classList.remove('hidden');
+    } catch (err) {
+        console.error(err);
+        alert('Could not read this image. Try a JPEG or PNG if the problem persists.');
+    } finally {
+        loader.remove();
+    }
+}
+
+// Promisified FileReader
+function readAsDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = e => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// Promisified Image loader
+function loadImage(src) {
+    return new Promise((resolve, reject) => {
         const img = new Image();
-        img.onload = () => {
-            previewImg.src = e.target.result;
-            const colors = extractColors(img, 5);
-            const soup   = matchSoup(colors);
-            renderColors(colors);
-            renderSoup(soup, colors);
-
-            uploadSection.classList.add('hidden');
-            resultSection.classList.remove('hidden');
-
-            loader.remove();
-        };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+        img.onload  = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
 }
 
 // ──── Color extraction (k-means-ish quantization) ────
@@ -521,7 +566,247 @@ const SOUPS = [
             { name: 'Tomato paste',  color: '#b83020' },
         ]
     },
+    // ── World cuisines ─────────────────────────────────
+    {
+        name: 'Pho Bo (Vietnamese Beef)',
+        matches: ['Brown', 'Beige', 'Orange'],
+        priority: ['Brown', 'Beige'],
+        description: 'Vietnam\'s iconic noodle soup — a long-simmered beef broth perfumed with star anise, cinnamon and ginger, served with rice noodles, herbs and lime.',
+        ingredients: [
+            { name: 'Beef bones',  color: '#6b3820' },
+            { name: 'Star anise',  color: '#3a2010' },
+            { name: 'Cinnamon',    color: '#8b5e3c' },
+            { name: 'Rice noodles',color: '#f5f0e0' },
+            { name: 'Fresh lime',  color: '#a0c840' },
+            { name: 'Bean sprouts',color: '#e8e8d0' },
+        ]
+    },
+    {
+        name: 'Miso Ramen',
+        matches: ['Brown', 'Beige', 'Yellow', 'Orange'],
+        priority: ['Brown', 'Yellow'],
+        description: 'A Japanese soul-food classic — rich miso broth with ramen noodles, a marinated soft-boiled egg, nori and roasted sesame.',
+        ingredients: [
+            { name: 'White miso',      color: '#d4c090' },
+            { name: 'Ramen noodles',   color: '#f5e8c0' },
+            { name: 'Soft-boiled egg', color: '#f5d06a' },
+            { name: 'Nori seaweed',    color: '#1e2e20' },
+            { name: 'Sesame seeds',    color: '#d4c090' },
+            { name: 'Spring onion',    color: '#5cb85c' },
+        ]
+    },
+    {
+        name: 'Harira (Moroccan Lamb)',
+        matches: ['Brown', 'Red', 'Orange', 'Yellow'],
+        priority: ['Brown', 'Red'],
+        description: 'Morocco\'s hearty national soup — lamb, chickpeas, lentils and tomatoes richly spiced with turmeric, cinnamon, coriander and finished with a squeeze of lemon.',
+        ingredients: [
+            { name: 'Lamb pieces',   color: '#8b4030' },
+            { name: 'Chickpeas',     color: '#e0c888' },
+            { name: 'Red lentils',   color: '#d4603a' },
+            { name: 'Tomatoes',      color: '#d63030' },
+            { name: 'Turmeric',      color: '#d4a820' },
+            { name: 'Coriander',     color: '#4caf50' },
+        ]
+    },
+    {
+        name: 'Mulligatawny',
+        matches: ['Yellow', 'Orange', 'Brown', 'Green'],
+        priority: ['Yellow', 'Orange'],
+        description: 'An Anglo-Indian classic — lentils and chicken simmered in a fragrant curry broth with apple, coconut milk and a brightness of coriander.',
+        ingredients: [
+            { name: 'Red lentils',  color: '#d4603a' },
+            { name: 'Chicken',      color: '#e8c890' },
+            { name: 'Curry powder', color: '#d4a020' },
+            { name: 'Apple',        color: '#c8e060' },
+            { name: 'Coconut milk', color: '#faf7f0' },
+            { name: 'Coriander',    color: '#4caf50' },
+        ]
+    },
+    {
+        name: 'Bouillabaisse',
+        matches: ['Orange', 'Red', 'Yellow', 'Brown'],
+        priority: ['Orange', 'Red'],
+        description: 'The grand Provençal seafood soup — a golden saffron broth brimming with fish, mussels, prawns and fennel, served with rouille and crusty bread.',
+        ingredients: [
+            { name: 'Mixed fish',   color: '#e8d0a8' },
+            { name: 'Mussels',      color: '#2a2a3a' },
+            { name: 'Saffron',      color: '#d4a820' },
+            { name: 'Fennel',       color: '#b8c850' },
+            { name: 'Tomatoes',     color: '#d63030' },
+            { name: 'Rouille',      color: '#e8a030' },
+        ]
+    },
+    {
+        name: 'Avgolemono (Greek Lemon Chicken)',
+        matches: ['Yellow', 'Cream', 'White', 'Beige'],
+        priority: ['Yellow', 'Cream'],
+        description: 'A silky Greek comfort soup — delicate chicken broth thickened with eggs and brightened with a generous squeeze of lemon, served with orzo.',
+        ingredients: [
+            { name: 'Chicken stock', color: '#d4c480' },
+            { name: 'Orzo pasta',    color: '#f5e8c0' },
+            { name: 'Egg yolk',      color: '#f5c840' },
+            { name: 'Lemon juice',   color: '#e8e34e' },
+            { name: 'Shredded chicken', color: '#e8d0a8' },
+            { name: 'Fresh dill',    color: '#5a9a3a' },
+        ]
+    },
+    {
+        name: 'Caldo Verde (Portuguese Kale)',
+        matches: ['Green', 'Dark Green', 'Beige'],
+        priority: ['Green', 'Dark Green'],
+        description: 'Portugal\'s beloved national soup — a silky potato base studded with ribbons of deep green kale and thin rounds of smoky chouriço.',
+        ingredients: [
+            { name: 'Kale',          color: '#2e7d32' },
+            { name: 'Potatoes',      color: '#e8dcc8' },
+            { name: 'Chouriço',      color: '#9a3820' },
+            { name: 'Garlic',        color: '#f0e6d3' },
+            { name: 'Olive oil',     color: '#c5b94e' },
+            { name: 'Onion',         color: '#f5e0b0' },
+        ]
+    },
+    {
+        name: 'Ribollita (Tuscan Bread Soup)',
+        matches: ['Green', 'Brown', 'White', 'Orange'],
+        priority: ['Green', 'Brown'],
+        description: 'A Tuscan peasant masterpiece — stale bread dissolved into a thick, warming stew of cannellini beans, cavolo nero and hearty vegetables.',
+        ingredients: [
+            { name: 'Cavolo nero',       color: '#1e4a20' },
+            { name: 'Cannellini beans',  color: '#f0e8d0' },
+            { name: 'Stale bread',       color: '#e8d0a0' },
+            { name: 'Celery',            color: '#8bc850' },
+            { name: 'Carrot',            color: '#e87830' },
+            { name: 'Rosemary',          color: '#5a7830' },
+        ]
+    },
+    {
+        name: 'Cream of Broccoli',
+        matches: ['Green', 'Cream', 'White'],
+        priority: ['Green', 'Cream'],
+        description: 'Vivid green broccoli florets blended into a luxuriously smooth cream soup, finished with aged cheddar and crispy broccoli crumbs on top.',
+        ingredients: [
+            { name: 'Broccoli',      color: '#3a8a30' },
+            { name: 'Aged cheddar',  color: '#e8a838' },
+            { name: 'Double cream',  color: '#fffce8' },
+            { name: 'Garlic',        color: '#f0e6d3' },
+            { name: 'Onion',         color: '#f5e0b0' },
+            { name: 'Nutmeg',        color: '#8b6e4e' },
+        ]
+    },
+    {
+        name: 'Watercress Soup',
+        matches: ['Dark Green', 'Green', 'Cream'],
+        priority: ['Dark Green'],
+        description: 'An elegant, peppery British classic — peppery watercress blended with potato into a vivid emerald cream, finished with crème fraîche.',
+        ingredients: [
+            { name: 'Watercress',    color: '#1e5a20' },
+            { name: 'Potato',        color: '#e8dcc8' },
+            { name: 'Crème fraîche', color: '#fffce8' },
+            { name: 'Shallots',      color: '#d4b89a' },
+            { name: 'Butter',        color: '#f5d96a' },
+            { name: 'Nutmeg',        color: '#8b6e4e' },
+        ]
+    },
+    {
+        name: 'Chilled Cucumber & Mint Soup',
+        matches: ['Green', 'White', 'Grey'],
+        priority: ['Green', 'White'],
+        description: 'A spa-like chilled soup — cool cucumber, fresh mint and tangy yoghurt blended into a refreshing pale green cloud for hot summer days.',
+        ingredients: [
+            { name: 'Cucumber',      color: '#8ad050' },
+            { name: 'Greek yoghurt', color: '#f5f5f0' },
+            { name: 'Fresh mint',    color: '#4caf50' },
+            { name: 'Garlic',        color: '#f0e6d3' },
+            { name: 'Lemon juice',   color: '#e8e34e' },
+            { name: 'Dill',          color: '#5a9a3a' },
+        ]
+    },
+    {
+        name: 'Pumpkin & Sage Soup',
+        matches: ['Orange', 'Yellow', 'Dark Green'],
+        priority: ['Orange', 'Dark Green'],
+        description: 'Autumn in a bowl — roasted pumpkin deep with sweet caramel notes, balanced by earthy sage and a drizzle of toasted pine-nut butter.',
+        ingredients: [
+            { name: 'Pumpkin',     color: '#e07830' },
+            { name: 'Fresh sage',  color: '#7a9030' },
+            { name: 'Pine nuts',   color: '#d4c090' },
+            { name: 'Brown butter',color: '#a87030' },
+            { name: 'Cream',       color: '#fff5dc' },
+            { name: 'Nutmeg',      color: '#8b6e4e' },
+        ]
+    },
+    {
+        name: 'Melon Gazpacho',
+        matches: ['Yellow', 'Orange', 'Cream'],
+        priority: ['Yellow', 'Cream'],
+        description: 'A playful Spanish riff — chilled Cantaloupe melon blended with cucumber, ginger and a touch of sherry vinegar into a pale golden velvet.',
+        ingredients: [
+            { name: 'Cantaloupe melon', color: '#f0b870' },
+            { name: 'Cucumber',         color: '#8ad050' },
+            { name: 'Sherry vinegar',   color: '#c8902a' },
+            { name: 'Fresh ginger',     color: '#d4b86a' },
+            { name: 'Mint',             color: '#4caf50' },
+            { name: 'Olive oil',        color: '#c5b94e' },
+        ]
+    },
+    {
+        name: 'Lobster Bisque',
+        matches: ['Orange', 'Pink', 'Red', 'Brown'],
+        priority: ['Orange', 'Pink'],
+        description: 'The pinnacle of French luxury — a coral-orange cream bisque built from lobster shells, cognac, tarragon and a silky velvet of double cream.',
+        ingredients: [
+            { name: 'Lobster',       color: '#e06040' },
+            { name: 'Double cream',  color: '#fffce8' },
+            { name: 'Cognac',        color: '#c8802a' },
+            { name: 'Tarragon',      color: '#5a8a38' },
+            { name: 'Tomato paste',  color: '#b83020' },
+            { name: 'Shallots',      color: '#d4b89a' },
+        ]
+    },
+    {
+        name: 'Garlic Soup (Soupe à l\'Ail)',
+        matches: ['White', 'Yellow', 'Beige'],
+        priority: ['White', 'Yellow'],
+        description: 'A Gascon peasant treasure — whole heads of garlic simmered until sweet and mellow in a golden broth, thickened with egg yolks and bread.',
+        ingredients: [
+            { name: 'Garlic (whole)', color: '#f5e8c0' },
+            { name: 'Egg yolks',      color: '#f5c840' },
+            { name: 'Bread',          color: '#e8d0a0' },
+            { name: 'Olive oil',      color: '#c5b94e' },
+            { name: 'Thyme',          color: '#6b8e23' },
+            { name: 'Chicken stock',  color: '#d4c480' },
+        ]
+    },
+    {
+        name: 'Tom Yum Kung',
+        matches: ['Red', 'Orange', 'Green', 'Yellow'],
+        priority: ['Red', 'Orange'],
+        description: 'Thailand\'s most iconic soup — a fiery, sour and fragrant clear broth with prawns, lemongrass, kaffir lime, galangal and Thai chillies.',
+        ingredients: [
+            { name: 'Tiger prawns', color: '#e86050' },
+            { name: 'Lemongrass',   color: '#b8c850' },
+            { name: 'Thai chilli',  color: '#d63030' },
+            { name: 'Kaffir lime',  color: '#6ab04c' },
+            { name: 'Fish sauce',   color: '#c8a040' },
+            { name: 'Galangal',     color: '#e8d0a8' },
+        ]
+    },
+    {
+        name: 'Cream of Celery',
+        matches: ['Beige', 'White', 'Green'],
+        priority: ['Beige', 'White'],
+        description: 'An understated British classic — celery slow-cooked in butter until meltingly soft, then blended into a silky pale cream soup with a whisper of mace.',
+        ingredients: [
+            { name: 'Celery',        color: '#9abf60' },
+            { name: 'Onion',         color: '#f5e0b0' },
+            { name: 'Double cream',  color: '#fffce8' },
+            { name: 'Mace',          color: '#d4a060' },
+            { name: 'Butter',        color: '#f5d96a' },
+            { name: 'Chicken stock', color: '#d4c480' },
+        ]
+    },
 ];
+
 
 // ──── Match best soup ────
 function matchSoup(colors) {
